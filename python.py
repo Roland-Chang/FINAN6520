@@ -2,10 +2,15 @@ import pandas as pd
 import pandas_datareader as web
 import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sb
 import sklearn.metrics
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 from sklearn.model_selection import train_test_split
+import Lecture12.WOE as woe
+from sklearn import linear_model
+from sklearn.metrics import r2_score
+
 
 
 def printOutTheCoefficients(params,coeffecients,intercept):
@@ -94,6 +99,24 @@ joinedDfs.rename(columns = {"Close": "SP500", "CPIAUCSL": "CPI", "APU0000713111"
                             "POILBREUSDM": "Oil", "FEDFUNDS": "FedFunds", "AWHAETP": "HoursWorked",
                             "T10Y2Y": "Yield", "UMCSENT": "Sentiment", "M2SL": "M2"}, inplace = True)
 
+# sorting the df in ascending order by its index
+joinedDfs = joinedDfs.sort_index()
+# shifting all columns but the index and SP500 down by a row
+shiftCols = ['M2', 'Sentiment', 'Yield', 'HoursWorked', 'FedFunds', 'Oil'
+             , 'Beef', 'OJ', 'CPI']
+joinedDfs[shiftCols] = joinedDfs[shiftCols].shift(1)
+# dropping the first row since all values in that row would be nan
+joinedDfs = joinedDfs.drop(joinedDfs.index[0])
+
+# correlation check
+correlation = joinedDfs.corr(numeric_only=True)
+finalIV,IV = woe.data_vars(joinedDfs,joinedDfs["SP500"])
+correlation.to_excel("correlation.xlsx")
+IV.to_excel("IVOutput.xlsx")
+
+sb.heatmap(correlation)
+plt.show()
+
 # separate for results and input sets
 dfResults = joinedDfs["SP500"]
 dfInputs = joinedDfs.drop("SP500", axis=1)
@@ -102,4 +125,22 @@ dfInputs = joinedDfs.drop("SP500", axis=1)
 inputsTrain, inputsTest, resultTrain, resultTest = train_test_split(dfInputs, dfResults,
                                                                     test_size=0.5, random_state=1)
 
+# Fit the linear regression model
+linRegr = linear_model.LinearRegression()
+linRegr.fit(inputsTrain, resultTrain)
 
+# Predict the values
+Ypredict = linRegr.predict(inputsTrain)
+
+# Calculate R-squared
+r2easy = r2_score(resultTrain, Ypredict)
+print("Our calculated coeffs m:{} and b:{} and our r2 is {}".format(linRegr.coef_, linRegr.intercept_, r2easy))
+
+# Plotting
+plt.scatter(resultTrain, Ypredict, color='blue', label='Predicted')
+plt.plot(resultTrain, resultTrain, color='red', linewidth=2, label='Actual')
+plt.title('Linear Regression: Actual vs Predicted')
+plt.xlabel('Actual Values')
+plt.ylabel('Predicted Values')
+plt.legend()
+plt.show()
